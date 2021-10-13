@@ -1,5 +1,6 @@
 import numpy as np
 import sys
+import math
 from math import sqrt
 
 class Parameters:
@@ -44,10 +45,69 @@ def calculate_momenta(parameters):
 
     np.savetxt('out_mom.txt', momenta, delimiter = '\t')
 
+#potencjal ogolnia wartosc, sily dla wszystkich atomow wypisac
+def calculate_potential(atoms, parameters):
+    V = 0.
+    F = np.zeros((parameters.N, 3))
+    P = 0
+
+    #potencjal od scianek
+    V_s = np.zeros((parameters.N))
+    r = np.sqrt(np.sum(atoms**2, axis = 1))
+    V_s[r >= parameters.L] = 1./2*parameters.f*np.square(r-parameters.L)[r >= parameters.L]
+    V += np.sum(V_s, axis = 0)
+    print(V_s)
+    print('V_s ',  np.sum(V_s, axis=0))
+
+
+
+
+    #sily odpychania od scianek
+    F_s = np.zeros((parameters.N, 3))
+    F_s_calc = np.repeat(parameters.f*(parameters.L-r)[np.newaxis, :], 3, 0).T * np.divide(atoms, np.repeat(r[np.newaxis, :], 3, 0).T)
+    F_s[r >= parameters.L, :] = F_s_calc[r >= parameters.L, :]
+    F += F_s
+
+    #cisnienie chwilowe
+    Fnorm_sum = np.sum(np.sum(F_s**2, axis = 1), axis=0)
+    P = 1./(4*math.pi*parameters.L**2)*Fnorm_sum
+
+
+    #potencjał  par atomowych
+    V_vdw = np.zeros((parameters.N, parameters.N))
+    rij = np.zeros((parameters.N, parameters.N))
+    for i in range(parameters.N):
+        for j in range(i):
+                rij[i, j] = math.sqrt(np.sum(np.square(atoms[i] - atoms[j])))
+                V_vdw[i, j] = parameters.e * ( (parameters.R/ rij[i,j])**12 - 2*(parameters.R/rij[i,j])**6 )
+    #Rr = np.divide(parameters.R, rij)
+    #V_vdw = parameters.e*(np.power(Rr, 12) - 2*np.power(Rr, 6))
+    V += np.nansum(V_vdw)
+
+    #sily par atomowych
+    F_vdw = np.zeros((parameters.N, parameters.N, 3))
+    for i in range(parameters.N):
+        for j in range(i):
+            rij2 = math.sqrt(np.sum(np.square(atoms[i] - atoms[j])))
+            F_vdw[i, j, :] = 12*parameters.e*((parameters.R/rij2)**12 - (parameters.R/rij2)**6)*(atoms[i]-atoms[j])/rij2**2
+
+            F[i, :] += F_vdw[i, j, :]
+            F[j, :] -= F_vdw[i, j, :]
+
+    print(V)
+
+    np.savetxt('out_for.txt', F, delimiter = '\t')
+
+
+
+
+
+
 
 if __name__ == "__main__":
 
     params = Parameters()
     atoms = np.zeros((params.N, 3))
-    calculate_positions(atoms, params)
+    calculate_positions(atoms, params) #polozenia zapisane w atoms
     calculate_momenta(params)
+    calculate_potential(atoms, params)

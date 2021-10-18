@@ -1,104 +1,91 @@
 import numpy as np
 import sys
+import time
 import math
 from math import sqrt
 
-class Parameters:
-    def __init__(self):
-        infile = sys.argv[1]
-        lines = np.loadtxt(infile, comments = "#")
-        self.n = int(lines[0])
-        self.m = lines[1]
-        self.e = lines[2]
-        self.R = lines[3]
-        self.f = lines[4]
-        self.L = lines[5]
-        self.a = lines[6]
-        self.T_0 = lines[7]
-        self.tau = lines[8]
-        self.S_o = lines[9]
-        self.S_d = lines[10]
-        self.S_out = lines[11]
-        self.S_xyz = lines[12]
 
-        self.N = self.n*self.n*self.n
-        self.k = 0.00831
+def calculate_positions(a, n, N):
+    atoms = np.zeros((N, 3))
+    b0=np.array([a, 0, 0])
+    b1=np.array([a/2, a/2*sqrt(3), 0])
+    b2=np.array([a/2, a/6*sqrt(3), a*sqrt(2/3)])
 
-def calculate_positions(atoms, parameters):
-    b0=np.array([parameters.a, 0, 0])
-    b1=np.array([parameters.a/2, parameters.a/2*sqrt(3), 0])
-    b2=np.array([parameters.a/2, parameters.a/6*sqrt(3), parameters.a*sqrt(2/3)])
-
-    for i0 in range(parameters.n):
-        for i1 in range(parameters.n):
-            for i2 in range(parameters.n):
-                i = i0 + i1*parameters.n + i2*parameters.n*parameters.n
-                atoms[i] = (i0 - (parameters.n-1)/2)*b0 + (i1 - (parameters.n-1)/2)*b1 + (i2-(parameters.n-1)/2)*b2
+    for i0 in range(n):
+        for i1 in range(n):
+            for i2 in range(n):
+                i = i0 + i1*n + i2*n*n
+                atoms[i] = (i0 - (n-1)/2)*b0 + (i1 - (n-1)/2)*b1 + (i2-(n-1)/2)*b2
 
     np.savetxt('out_pos.txt', atoms, delimiter = '\t')
+    return atoms
 
-def calculate_momenta(parameters):
-    energy = -1./2*parameters.k*parameters.T_0*np.log(np.random.uniform(size=(parameters.N, 3)))
-    momenta = np.random.choice([-1., 1.], size=(parameters.N, 3))*np.sqrt(energy*2*parameters.m)
+def calculate_momenta(k, T_0, N, m):
+    energy = -1./2*k*T_0*np.log(np.random.uniform(size=(N, 3)))
+    momenta = np.random.choice([-1., 1.], size=(N, 3))*np.sqrt(energy*2*m)
     momSum = np.sum(momenta, axis = 0)
-    momenta -= momSum/parameters.N
+    momenta -= momSum/N
 
     np.savetxt('out_mom.txt', momenta, delimiter = '\t')
+    return momenta
 
 #potencjal ogolnia wartosc, sily dla wszystkich atomow wypisac
-def calculate_potential(atoms, parameters):
+def calculate_VFP(atoms, N, L, f, e, R):
     V = 0.
-    F = np.zeros((parameters.N, 3))
-    P = 0
+    F = np.zeros((N, 3))
 
-    #potencjal od scianek
-    V_s = np.zeros((parameters.N))
+    #wall potential
+    V_s = np.zeros((N))
     r = np.sqrt(np.sum(atoms**2, axis = 1))
-    V_s[r >= parameters.L] = 1./2*parameters.f*np.square(r-parameters.L)[r >= parameters.L]
+    V_s[r >= L] = 1./2*f*np.square(r-L)[r >= L]
     V += np.sum(V_s, axis = 0)
-    print(V_s)
-    print('V_s ',  np.sum(V_s, axis=0))
 
-
-
-
-    #sily odpychania od scianek
-    F_s = np.zeros((parameters.N, 3))
-    F_s_calc = np.repeat(parameters.f*(parameters.L-r)[np.newaxis, :], 3, 0).T * np.divide(atoms, np.repeat(r[np.newaxis, :], 3, 0).T)
-    F_s[r >= parameters.L, :] = F_s_calc[r >= parameters.L, :]
+    #wall forces
+    F_s = np.zeros((N, 3))
+    F_s[r >= L] =f*(L-r[r >= L, np.newaxis])*atoms[r >= L]/r[r >= L, np.newaxis]
     F += F_s
 
-    #cisnienie chwilowe
-    Fnorm_sum = np.sum(np.sum(F_s**2, axis = 1), axis=0)
-    P = 1./(4*math.pi*parameters.L**2)*Fnorm_sum
-
-
-    #potencjał  par atomowych
-    V_vdw = np.zeros((parameters.N, parameters.N))
-    rij = np.zeros((parameters.N, parameters.N))
-    for i in range(parameters.N):
+    #van der waals potential + forces between atom pairs
+    V_vdw = np.zeros((N, N))
+    F_vdw = np.zeros((N, N, 3))
+    for i in range(N):
         for j in range(i):
-                rij[i, j] = math.sqrt(np.sum(np.square(atoms[i] - atoms[j])))
-                V_vdw[i, j] = parameters.e * ( (parameters.R/ rij[i,j])**12 - 2*(parameters.R/rij[i,j])**6 )
-    #Rr = np.divide(parameters.R, rij)
-    #V_vdw = parameters.e*(np.power(Rr, 12) - 2*np.power(Rr, 6))
-    V += np.nansum(V_vdw)
-
-    #sily par atomowych
-    F_vdw = np.zeros((parameters.N, parameters.N, 3))
-    for i in range(parameters.N):
-        for j in range(i):
-            rij2 = math.sqrt(np.sum(np.square(atoms[i] - atoms[j])))
-            F_vdw[i, j, :] = 12*parameters.e*((parameters.R/rij2)**12 - (parameters.R/rij2)**6)*(atoms[i]-atoms[j])/rij2**2
-
+            rij = np.linalg.norm(atoms[i] - atoms[j])
+            V_vdw[i, j] = e * ( (R/ rij)**12 - 2*(R/rij)**6 )
+            F_vdw[i, j, :] = 12*e*((R/rij)**12 - (R/rij)**6)*(atoms[i]-atoms[j])/rij**2
             F[i, :] += F_vdw[i, j, :]
             F[j, :] -= F_vdw[i, j, :]
+    V += np.sum(V_vdw)
 
-    print(V)
+    #temporary pressure
+    P = np.sum(np.sum(F_s**2, axis = 1), axis=0)/(4*math.pi*L**2)
 
+    print('V_s: ',  np.sum(V_s, axis=0))
+    print('V: ', V)
+    print('P: ', P)
     np.savetxt('out_for.txt', F, delimiter = '\t')
 
+    return V, F, P
 
+def simulation(atoms, momenta, N, L, f, e, R, tau, m, k, So, Sd):
+    V, F, P = calculate_VFP(atoms, N, L, f, e, R)
+    Tavr = Havr = Pavr = 0
+    with open(sys.argv[2], 'w+') as outfile, open(sys.argv[3], 'w+') as outxyz:
+        for s in range(1, So + Sd + 1):
+                momenta = momenta + 1./2*F*tau
+                atoms = atoms + 1./m * momenta*tau
+                V, F, P = calculate_VFP(atoms, N, L, f, e, R)
+                momenta = momenta + 1./2* F*tau
+
+                Ekin = np.sum(np.linalg.norm(momenta)**2 / (2*m), axis=0)
+                H = Ekin + V
+                T= 2 / (3*N*k)*Ekin
+
+                if(s % S_out == 0):
+
+                if(s % S_xyz == 0):
+
+                if(s >= So):
 
 
 
@@ -106,8 +93,20 @@ def calculate_potential(atoms, parameters):
 
 if __name__ == "__main__":
 
-    params = Parameters()
-    atoms = np.zeros((params.N, 3))
-    calculate_positions(atoms, params) #polozenia zapisane w atoms
-    calculate_momenta(params)
-    calculate_potential(atoms, params)
+    tic = time.time()
+
+    params = {}
+    with open(sys.argv[1]) as f:
+        for line in f:
+            val, key = line.split("#")
+            params[key.strip()] = float(val.strip())
+    params['N'] = int(params['n']*params['n']*params['n'])
+    params['k'] = 0.00831
+
+    atoms = calculate_positions(params['a'], int(params['n']), params['N'])
+    momenta = calculate_momenta(params['k'], params['T_0'], params['N'], params['m'])
+    V, F, P = calculate_VFP(atoms, params['N'], params['L'], params['f'], params['e'], params['R'])
+    simulation(atoms, momenta, params['N'], params['L'], params['f'], params['e'], params['R'], params['tau'], params['m'], params['k'], int(params['So']), int(params['Sd']))
+    print(params['tau'])
+    toc = time.time()
+    print('execution time in ms: ', 1000*(toc-tic))

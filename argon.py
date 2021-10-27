@@ -84,7 +84,7 @@ def simulation(atoms, momenta, N, L, f, e, R, tau, m, k, So, Sd, S_out, S_xyz):
                     # zapis wsp. atomów oraz ich Ekin do avs.dat: xi, yi, zi, Ekini
                     data_xyz = np.concatenate((atoms, Ekin[:, None]), axis = 1)
                     np.savetxt(outxyz, data_xyz, delimiter = '\t')
-                    outxyz.write('\n\n')
+                    #outxyz.write('\n\n')
 
                 if(s >= So):
                     Tavr += T

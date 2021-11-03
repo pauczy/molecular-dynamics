@@ -17,7 +17,7 @@ def calculate_positions(a, n, N):
                 i = i0 + i1*n + i2*n*n
                 atoms[i] = (i0 - (n-1)/2)*b0 + (i1 - (n-1)/2)*b1 + (i2-(n-1)/2)*b2
 
-    # np.savetxt('out_pos.txt', atoms, delimiter = '\t')
+    #np.savetxt('out_pos.txt', atoms, delimiter = '\t')
     return atoms
 
 def calculate_momenta(k, T_0, N, m):
@@ -29,7 +29,7 @@ def calculate_momenta(k, T_0, N, m):
     #np.savetxt('out_mom.txt', momenta, delimiter = '\t')
     return momenta
 
-@njit #  = @jit(nopython=True)
+@njit
 def calculate_VFP(atoms, N, L, f, e, R):
 
     V = 0
@@ -57,7 +57,7 @@ def calculate_VFP(atoms, N, L, f, e, R):
 
 def simulation(atoms, momenta, N, L, f, e, R, tau, m, k, So, Sd, S_out, S_xyz):
     V, F, P = calculate_VFP(atoms, N, L, f, e, R)
-    Tavr = Havr = Pavr = 0
+    Tavr = Havr = Pavr = 0.
     with open(argv[2], 'w+') as out, open(argv[3], 'w+') as outxyz:
         out.write("t \t\t H \t\t V \t\t T \t\t P \n")
         for s in range(1, So + Sd + 1):
@@ -102,6 +102,7 @@ def simulation(atoms, momenta, N, L, f, e, R, tau, m, k, So, Sd, S_out, S_xyz):
 if __name__ == "__main__":
 
     tic = time()
+    np.random.seed(0)
 
     params = {}
     with open(argv[1]) as f:
@@ -113,6 +114,9 @@ if __name__ == "__main__":
     atoms = calculate_positions(params['a'], int(params['n']), params['N'])
     momenta = calculate_momenta(params['k'], params['T_0'], params['N'], params['m'])
     # V, F, P = calculate_VFP(atoms, params['N'], params['L'], params['f'], params['e'], params['R'])
+    # print("V: ", V, "\n")
+
+
     simulation(atoms, momenta, params['N'], params['L'], params['f'], params['e'], params['R'], params['tau'], params['m'], params['k'], int(params['So']), int(params['Sd']), int(params['S_out']), int(params['S_xyz']))
 
     toc = time()

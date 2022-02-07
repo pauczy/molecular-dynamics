@@ -4,13 +4,10 @@ Molecular dynamics simulation of argon atoms in a spherical container.
 
 Created for Computer Simulation Methods class @Warsaw University of Technology.
 
-## Usage 
+## Results
 
-To run the simulation:
+Simulation for 5 atoms at the starting temperature 500K.
 
-`python argon.py "params.txt" "out.txt" "avs.dat"`
 
-To run animation:
-
-`python animation.py`
+https://user-images.githubusercontent.com/58596889/152856620-26ddbf84-971a-4f67-9fd2-48d11f2b8b02.mp4
 
